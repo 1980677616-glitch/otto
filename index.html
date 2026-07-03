@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PaddleEdge Agent | 乒乓球预测智能体</title>
+    <meta
+      name="description"
+      content="面向乒乓球赛前分析的专业预测智能体 Demo，展示数据接入、特征工程、qwen3.7-plus 推理、校验和决策输出工作流。"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <script defer src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <script defer src="./app.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand-lockup" aria-label="PaddleEdge Agent">
+          <div class="brand-mark">PE</div>
+          <div>
+            <p class="eyebrow">Alibaba Cloud Model Studio · qwen3.7-plus</p>
+            <h1>乒乓球赛前预测智能体</h1>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <span class="status-pill"><i data-lucide="radio-tower"></i> GitHub Pages Demo</span>
+          <a class="icon-link" href="#model-contract" title="查看模型契约" aria-label="查看模型契约">
+            <i data-lucide="braces"></i>
+          </a>
+        </div>
+      </header>
+
+      <main class="layout">
+        <aside class="control-panel" aria-label="预测输入面板">
+          <section class="panel-section">
+            <div class="section-title">
+              <i data-lucide="settings-2"></i>
+              <h2>运行模式</h2>
+            </div>
+            <div class="segmented" role="group" aria-label="运行模式">
+              <button type="button" class="segment active" data-mode="demo">Demo</button>
+              <button type="button" class="segment" data-mode="live">Live Proxy</button>
+            </div>
+            <label class="field">
+              <span>模型代理 URL</span>
+              <input
+                id="proxyUrl"
+                type="url"
+                placeholder="https://your-proxy.example.com/predict"
+                autocomplete="off"
+              />
+            </label>
+            <p class="microcopy">前端不保存阿里云 API Key；Live 模式只向你配置的代理发送特征和提示词。</p>
+          </section>
+
+          <section class="panel-section">
+            <div class="section-title">
+              <i data-lucide="calendar-clock"></i>
+              <h2>比赛场景</h2>
+            </div>
+            <div class="two-col">
+              <label class="field">
+                <span>赛制</span>
+                <select id="matchFormat">
+                  <option value="5">五局三胜</option>
+                  <option value="7">七局四胜</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>台面速度</span>
+                <select id="tableSpeed">
+                  <option value="medium">标准</option>
+                  <option value="fast">偏快</option>
+                  <option value="slow">偏慢</option>
+                </select>
+              </label>
+            </div>
+            <label class="range-field">
+              <span>关键分压力 <output id="pressureOut">68</output></span>
+              <input id="pressure" type="range" min="0" max="100" value="68" />
+            </label>
+          </section>
+
+          <section class="panel-section player-card" data-player="a">
+            <div class="section-title">
+              <i data-lucide="user-round-check"></i>
+              <h2>选手 A</h2>
+            </div>
+            <label class="field">
+              <span>姓名</span>
+              <input id="playerAName" value="陈昊" />
+            </label>
+            <div class="two-col">
+              <label class="field">
+                <span>持拍</span>
+                <select id="playerAHand">
+                  <option value="right">右手</option>
+                  <option value="left">左手</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>打法</span>
+                <select id="playerAStyle">
+                  <option value="loop">两面弧圈</option>
+                  <option value="fast">近台快攻</option>
+                  <option value="allround">均衡控制</option>
+                  <option value="defense">削攻结合</option>
+                </select>
+              </label>
+            </div>
+            <div class="range-grid" id="playerAStats"></div>
+          </section>
+
+          <section class="panel-section player-card" data-player="b">
+            <div class="section-title">
+              <i data-lucide="user-round"></i>
+              <h2>选手 B</h2>
+            </div>
+            <label class="field">
+              <span>姓名</span>
+              <input id="playerBName" value="林岳" />
+            </label>
+            <div class="two-col">
+              <label class="field">
+                <span>持拍</span>
+                <select id="playerBHand">
+                  <option value="right">右手</option>
+                  <option value="left" selected>左手</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>打法</span>
+                <select id="playerBStyle">
+                  <option value="loop">两面弧圈</option>
+                  <option value="fast">近台快攻</option>
+                  <option value="allround" selected>均衡控制</option>
+                  <option value="defense">削攻结合</option>
+                </select>
+              </label>
+            </div>
+            <div class="range-grid" id="playerBStats"></div>
+          </section>
+
+          <section class="panel-section">
+            <div class="section-title">
+              <i data-lucide="notebook-tabs"></i>
+              <h2>球探备注</h2>
+            </div>
+            <textarea id="scoutingNotes" rows="5">A 近期反手位变线成功率高，但连续相持到第 7 板后失误增多。B 接逆旋转短球更稳定，面对快节奏台内抢攻时退台偏慢。</textarea>
+            <div class="button-row">
+              <button type="button" class="secondary-btn" id="sampleBtn">
+                <i data-lucide="refresh-cw"></i>
+                载入样例
+              </button>
+              <button type="button" class="primary-btn" id="runBtn">
+                <i data-lucide="activity"></i>
+                运行预测
+              </button>
+            </div>
+          </section>
+        </aside>
+
+        <section class="workspace" aria-label="预测结果工作区">
+          <section class="match-visual">
+            <img
+              src="https://commons.wikimedia.org/wiki/Special:Redirect/file/Mondial%20Ping%20-%20Men%27s%20Doubles%20-%20Semifinals%20-%2034.jpg?width=1600"
+              alt="专业乒乓球比赛场景"
+            />
+            <div class="visual-overlay">
+              <div>
+                <span class="tag">赛前研判</span>
+                <h2 id="matchTitle">陈昊 vs 林岳</h2>
+              </div>
+              <div class="mini-metrics">
+                <span><strong id="deltaScore">+0.0</strong> 综合差值</span>
+                <span><strong id="modelState">Demo</strong> 推理模式</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="result-grid">
+            <article class="metric-card primary-metric">
+              <div class="metric-heading">
+                <span>预测胜率</span>
+                <i data-lucide="gauge"></i>
+              </div>
+              <div class="probability-ring" id="probRing" style="--prob: 0.62">
+                <span id="winProb">62%</span>
+              </div>
+              <p id="winnerLine">陈昊获胜倾向，建议按强接发轮次准备。</p>
+            </article>
+            <article class="metric-card">
+              <div class="metric-heading">
+                <span>预测比分</span>
+                <i data-lucide="list-ordered"></i>
+              </div>
+              <strong id="setScore">3 : 1</strong>
+              <p id="scoreReason">五局三胜，优势集中在前三板和发球轮。</p>
+            </article>
+            <article class="metric-card">
+              <div class="metric-heading">
+                <span>置信度</span>
+                <i data-lucide="shield-check"></i>
+              </div>
+              <strong id="confidence">74%</strong>
+              <p id="confidenceLine">样本质量中等，关键分压力存在扰动。</p>
+            </article>
+          </section>
+
+          <section class="workflow-card">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">Agent Workflow</p>
+                <h2>预测工作流</h2>
+              </div>
+              <button type="button" class="secondary-btn compact" id="exportBtn">
+                <i data-lucide="download"></i>
+                导出
+              </button>
+            </div>
+            <div class="workflow" id="workflow">
+              <article class="workflow-step done">
+                <span class="step-index">1</span>
+                <h3>数据接入</h3>
+                <p id="stepInput">采集选手技术指标、赛制、台面速度和球探备注。</p>
+              </article>
+              <article class="workflow-step done">
+                <span class="step-index">2</span>
+                <h3>特征工程</h3>
+                <p id="stepFeature">计算 8 项加权差值、左右手相性和环境修正。</p>
+              </article>
+              <article class="workflow-step active">
+                <span class="step-index">3</span>
+                <h3>qwen3.7-plus 推理</h3>
+                <p id="stepModel">构造专业提示词，要求模型输出结构化战术判断。</p>
+              </article>
+              <article class="workflow-step">
+                <span class="step-index">4</span>
+                <h3>一致性校验</h3>
+                <p id="stepCheck">对模型结论与数值评分做交叉校验。</p>
+              </article>
+              <article class="workflow-step">
+                <span class="step-index">5</span>
+                <h3>决策输出</h3>
+                <p id="stepOutput">生成胜率、比分、风险点和训练建议。</p>
+              </article>
+            </div>
+          </section>
+
+          <section class="analysis-grid">
+            <article class="analysis-card">
+              <div class="card-header small">
+                <h2>关键因子</h2>
+                <i data-lucide="bar-chart-3"></i>
+              </div>
+              <div id="factorBars" class="factor-bars"></div>
+            </article>
+            <article class="analysis-card">
+              <div class="card-header small">
+                <h2>战术输出</h2>
+                <i data-lucide="clipboard-check"></i>
+              </div>
+              <ul id="tacticalList" class="tactical-list"></ul>
+            </article>
+            <article class="analysis-card">
+              <div class="card-header small">
+                <h2>风险提示</h2>
+                <i data-lucide="triangle-alert"></i>
+              </div>
+              <ul id="riskList" class="risk-list"></ul>
+            </article>
+          </section>
+
+          <section class="contract-card" id="model-contract">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">Model Contract</p>
+                <h2>qwen3.7-plus 调用载荷</h2>
+              </div>
+              <button type="button" class="secondary-btn compact" id="copyPayloadBtn">
+                <i data-lucide="copy"></i>
+                复制
+              </button>
+            </div>
+            <pre><code id="payloadPreview"></code></pre>
+          </section>
+        </section>
+      </main>
+
+      <footer class="site-footer">
+        <span>Professional table tennis prediction agent demo.</span>
+        <a
+          href="https://commons.wikimedia.org/wiki/File:Mondial_Ping_-_Men%27s_Doubles_-_Semifinals_-_34.jpg"
+          target="_blank"
+          rel="noreferrer"
+        >比赛图片来源：Wikimedia Commons</a>
+      </footer>
+    </div>
+  </body>
+</html>
